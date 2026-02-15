@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  panthera-vision:
+    build:
+      context: ../
+      dockerfile: infrastructure/Dockerfile
+    image: panthera-vision:latest
+    container_name: panthera_vision
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../configs:/app/configs
+      - ../models:/app/models
+      - ../logs:/app/logs
+      - ../output:/app/output
+      - ../dataset:/app/dataset
+      - ../data.db:/app/data.db
+    environment:
+      - CONFIG_PATH=configs/config.yaml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: gunicorn --bind 0.0.0.0:5000 --threads 4 --worker-class gthread app.main:app
+
+  # Optional: Watchtower for auto-updating containers if you use a registry
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 30

@@ -1,0 +1,63 @@
+# Leopard Detection System Configuration
+
+system:
+  name: "PantheraVision"
+  version: "1.0.0"
+  debug: false
+  log_level: "INFO"
+  save_detections: true
+  output_dir: "output"
+
+camera:
+  # Using a placeholder for now. Replace with actual RTSP stream or HTTP URL
+  # source: "rtsp://admin:password@192.168.1.100:554/stream1" 
+  # For testing, you can use 0 for webcam or a video file path
+  source: "0" 
+  width: 1920
+  height: 1080
+  fps: 30
+  reconnect_interval: 5  # seconds
+  buffer_size: 512       # frames
+
+motion:
+  enabled: true
+  history: 500
+  var_threshold: 16
+  detect_shadows: true
+  min_area: 500          # Minimum area to be considered motion
+  learning_rate: 0.005
+
+detection:
+  model_path: "models/yolov8n.pt" # Default model, will be replaced by custom trained
+  conf_threshold: 0.65
+  iou_threshold: 0.45
+  classes: [0] # 0 is typically person in COCO, we will map our custom class ID here
+  img_size: 640
+  device: "cuda" # 'cpu' or 'cuda'
+  
+tracking:
+  enabled: true
+  max_age: 30
+  min_hits: 3
+  iou_threshold: 0.3
+
+alerts:
+  telegram:
+    enabled: false
+    token: "YOUR_BOT_TOKEN"
+    chat_id: "YOUR_CHAT_ID"
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    sender: "your_email@gmail.com"
+    password: "your_password"
+    recipients: ["admin@example.com"]
+  database:
+    enabled: true
+    path: "data.db"
+
+server:
+  host: "0.0.0.0"
+  port: 5000
+  secret_key: "change_this_secret_key"
