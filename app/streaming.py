@@ -1,8 +1,7 @@
-from flask import Flask, Response, render_template_string, jsonify
-import threading
 import cv2
 import time
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +21,26 @@ def generate():
     while True:
         with lock:
             if outputFrame is None:
-                continue
+                # If no frame yet, yield a black frame or wait
+                # Create a black placeholder if missing
+                blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(blank_frame, "Waiting for Camera...", (180, 240), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                (flag, encodedImage) = cv2.imencode(".jpg", blank_frame)
+                
+        if outputFrame is None:
+             time.sleep(0.1) # Prevent busy wait
+        else:
             (flag, encodedImage) = cv2.imencode(".jpg", outputFrame)
-            if not flag:
-                continue
+
+        if not flag:
+            continue
 
         yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + 
                bytearray(encodedImage) + b'\r\n')
+        
+        # Limit streaming FPS to save bandwidth
+        time.sleep(0.03)
 
 @app.route("/video")
 def video_feed():
