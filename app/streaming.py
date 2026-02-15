@@ -1,3 +1,5 @@
+from flask import Flask, Response, render_template_string, jsonify
+import threading
 import cv2
 import time
 import logging
@@ -18,29 +20,39 @@ def set_output_frame(frame):
 
 def generate():
     global outputFrame
+    
+    # Pre-create blank frame to disable re-creation overhead
+    blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(blank_frame, "Status: Waiting for Camera...", (50, 230), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(blank_frame, "No input source detected on Server", (50, 270), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
+
     while True:
+        frame_to_encode = None
+        
         with lock:
             if outputFrame is None:
-                # If no frame yet, yield a black frame or wait
-                # Create a black placeholder if missing
-                blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(blank_frame, "Waiting for Camera...", (180, 240), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                (flag, encodedImage) = cv2.imencode(".jpg", blank_frame)
-                
-        if outputFrame is None:
-             time.sleep(0.1) # Prevent busy wait
-        else:
-            (flag, encodedImage) = cv2.imencode(".jpg", outputFrame)
-
-        if not flag:
+                frame_to_encode = blank_frame
+            else:
+                frame_to_encode = outputFrame
+        
+        # Encode
+        try:
+            (flag, encodedImage) = cv2.imencode(".jpg", frame_to_encode)
+            if not flag:
+                time.sleep(0.1)
+                continue
+        except Exception as e:
+            logger.error(f"Encoding error: {e}")
+            time.sleep(0.1)
             continue
 
         yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + 
                bytearray(encodedImage) + b'\r\n')
         
-        # Limit streaming FPS to save bandwidth
-        time.sleep(0.03)
+        # Control FPS
+        time.sleep(0.05)
 
 @app.route("/video")
 def video_feed():
@@ -55,13 +67,17 @@ def index():
             <title>PantheraVision - Leopard Detection System</title>
             <style>
                 body { background-color: #1a1a1a; color: white; font-family: sans-serif; text-align: center; }
-                img { border: 2px solid #00ff00; max-width: 100%; height: auto; }
+                img { border: 2px solid #00ff00; max-width: 100%; height: auto; background-color: #000; }
+                .info { margin-top: 20px; color: #aaa; }
             </style>
         </head>
         <body>
             <h1>🐆 PantheraVision Live Stream</h1>
-            <img src="/video">
-            <p>Status: <span style="color: #00ff00;">Active</span></p>
+            <img src="/video" alt="Live Stream">
+            <div class="info">
+                <p>Status: <span style="color: #00ff00;">Active</span></p>
+                <p><small>Note: This system runs on the Server. It does not access your browser webcam.</small></p>
+            </div>
         </body>
     </html>
     """)
