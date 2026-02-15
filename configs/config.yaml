@@ -55,7 +55,7 @@ alerts:
     recipients: ["admin@example.com"]
   database:
     enabled: true
-    path: "data.db"
+    path: "data/data.db"
 
 server:
   host: "0.0.0.0"

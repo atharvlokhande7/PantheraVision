@@ -16,17 +16,17 @@ services:
       - ../logs:/app/logs
       - ../output:/app/output
       - ../dataset:/app/dataset
-      - ../data.db:/app/data.db
+      - ../data:/app/data
     environment:
       - CONFIG_PATH=configs/config.yaml
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    command: gunicorn --bind 0.0.0.0:5000 --threads 4 --worker-class gthread app.main:app
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    command: python -m app.main
 
   # Optional: Watchtower for auto-updating containers if you use a registry
   # watchtower:
