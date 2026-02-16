@@ -7,13 +7,15 @@ from queue import Queue
 logger = logging.getLogger(__name__)
 
 class CameraStream:
-    def __init__(self, source, reconnect_interval=5, buffer_size=128):
+    def __init__(self, source, reconnect_interval=5, buffer_size=128, file_mode=False):
         self.source = source
         self.reconnect_interval = reconnect_interval
         self.frame_queue = Queue(maxsize=buffer_size)
         self.stopped = False
         self.thread = None
         self.lock = threading.Lock()
+        self.file_mode = file_mode
+        self.file_cap = None
         
         # Determine if source is int (webcam) or str (file/rtsp)
         try:
@@ -22,6 +24,12 @@ class CameraStream:
             pass
 
     def start(self):
+        if self.file_mode:
+            self.file_cap = cv2.VideoCapture(self.source)
+            if not self.file_cap.isOpened():
+                logger.error(f"Failed to open video file: {self.source}")
+            return self
+            
         self.stopped = False
         self.thread = threading.Thread(target=self._update, args=())
         self.thread.daemon = True
@@ -58,6 +66,15 @@ class CameraStream:
         cap.release()
 
     def read(self):
+        if self.file_mode:
+            if self.file_cap and self.file_cap.isOpened():
+                ret, frame = self.file_cap.read()
+                if ret:
+                    return frame
+                else:
+                    return None
+            return None
+            
         if self.frame_queue.empty():
             return None
         return self.frame_queue.get()

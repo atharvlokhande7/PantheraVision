@@ -11,8 +11,10 @@ class LeopardDetector:
         logger.info(f"Loading YOLOv8 model from {model_path} on {self.device}...")
         try:
             self.model = YOLO(model_path)
-            # Warmup
-            self.model.predict(source="https://ultralytics.com/images/bus.jpg", device=self.device, verbose=False)
+            # Warmup with dummy image
+            import numpy as np
+            dummy_frame = np.zeros((640, 640, 3), dtype=np.uint8)
+            self.model.predict(source=dummy_frame, device=self.device, verbose=False)
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise
@@ -30,8 +32,6 @@ class LeopardDetector:
             conf=conf_thres, 
             iou=iou_thres, 
             classes=classes, 
-            device=self.device, 
-            verbose=False,
-            persist=True # For tracking if we use internal tracker
+            verbose=False
         )
         return results[0]  # Return first result (single frame)

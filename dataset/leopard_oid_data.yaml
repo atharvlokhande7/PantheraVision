@@ -1,0 +1,5 @@
+path: /home/admin/PantheraVision/dataset/leopard_oid
+train: train.txt
+val: val.txt
+nc: 1
+names: ['leopard']

@@ -12,7 +12,7 @@ camera:
   # Using a placeholder for now. Replace with actual RTSP stream or HTTP URL
   # source: "rtsp://admin:password@192.168.1.100:554/stream1" 
   # For testing, you can use 0 for webcam or a video file path
-  source: "0" 
+  source: 0 
   width: 1920
   height: 1080
   fps: 30
@@ -28,12 +28,12 @@ motion:
   learning_rate: 0.005
 
 detection:
-  model_path: "models/yolov8n.pt" # Default model, will be replaced by custom trained
-  conf_threshold: 0.65
+  model_path: "models/leopard_detector/weights/best.pt" # Custom trained model
+  conf_threshold: 0.25
   iou_threshold: 0.45
   classes: [0] # 0 is typically person in COCO, we will map our custom class ID here
   img_size: 640
-  device: "cuda" # 'cpu' or 'cuda'
+  device: "cpu" # 'cpu' or 'cuda'
   
 tracking:
   enabled: true

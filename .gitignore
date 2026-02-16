@@ -1,47 +1,34 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual Environment
 venv/
-env/
-ENV/
+.env
 
-# PyCharm
-.idea/
-
-# VS Code
-.vscode/
-
-# Project specific
-dataset/raw/
-dataset/processed/
-models/checkpoints/
-logs/*.log
-output/
+# Media
 *.mp4
 *.avi
 *.jpg
 *.png
-!dataset/.keep
-!models/.keep
-!logs/.keep
+
+# Output
+output/
+logs/
+*.log
+
+# Database
+*.db
+
+# Models & Data
+models/
+yolov8n.pt
+dataset/leopard_oid/
+dataset/download_oid.py
+data/
+
+# Debug Scripts
+debug_*.py
+extract_frame.py
+
+# System
+.DS_Store

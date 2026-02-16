@@ -26,7 +26,11 @@ class Pipeline:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        self.camera = CameraStream(self.config['camera']['source'])
+        # Check if source is a file
+        source = self.config['camera']['source']
+        self.is_file = isinstance(source, str) and Path(source).exists()
+        
+        self.camera = CameraStream(source, file_mode=self.is_file)
         self.stream_server = StreamServer()
         self.motion_detector = MotionDetector(self.config['motion'])
         self.detector = LeopardDetector(self.config['detection']['model_path'], self.config['detection'])
@@ -37,6 +41,12 @@ class Pipeline:
         self.running = True
         self.frame_count = 0
         self.start_time = time.time()
+        
+        # specific to output video
+        output_dir = Path("output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.output_path = output_dir / "leopard_detection_output.mp4"
+        self.video_writer = None
 
     def run(self):
         logger.info("Starting PantheraVision Pipeline...")
@@ -46,6 +56,9 @@ class Pipeline:
         while self.running:
             frame = self.camera.read()
             if frame is None:
+                if self.is_file:
+                    logger.info("End of video file reached.")
+                    break
                 time.sleep(0.01)
                 continue
 
@@ -57,11 +70,9 @@ class Pipeline:
             
             detections = []
             
-            # 2. Inference (run only if motion detected or periodic check)
-            # Optimization: Skip inference if no motion (unless needed for consistent tracking)
-            # For now, we run inference every frame if hardware allows, or use motion trigger to save compute.
-            # Let's use motion trigger + periodic forced inference (every 30 frames) to catch slow movers
-            if has_motion or (self.frame_count % 30 == 0):
+            # 2. Inference (run every frame if file mode to assure accuracy, or skip if needed)
+            # For video file output, we generally want every frame processed for smoothness
+            if self.is_file or has_motion or (self.frame_count % 30 == 0):
                 # YOLO Prediction
                 results = self.detector.predict(frame)
                 
@@ -73,9 +84,9 @@ class Pipeline:
                         cls = int(box.cls[0])
                         class_name = results.names[cls]
                         
-                        # Only care about target class (0=leopard based on our config)
-                        # but if using standard COCO model, '0' is person. 
-                        # Assuming we have a trained model where 0 is leopard
+                        # UX Improvement: Map 'cat' to 'Leopard'
+                        if class_name.lower() == 'cat':
+                            class_name = 'Leopard'
                         
                         # 3. Filtering
                         valid, reason = self.filter.validate_detection(
@@ -83,22 +94,10 @@ class Pipeline:
                         )
                         
                         if valid:
-                             # Add to list for tracker (using -1 as temp ID, tracker will assign/match)
-                            # Actually YOLO tracker returns IDs if we use .track() method. 
-                            # But we used .predict(). 
-                            # If we want IDs, we should use .track() in model.py.
-                            # For simplicity with custom pipeline: 
-                            # We'll pass raw dets to our tracker.py which assigns IDs.
                             detections.append((x1, y1, x2, y2, -1, conf, cls)) # -1 ID initially
 
             # 4. Tracking
-            # Basic tracker assignment
-            tracks = self.tracker.update(detections) # This needs detections format
-            # Wait, my simple tracker expects YOLO tracked output with IDs if I used .track().
-            # If I stick to .predict(), I need a SORT/Hungarian matcher in `tracker.py`.
-            # To fix this mismatch: I will rely on YOLO's internal tracker if possible, or
-            # use a simple centroid tracker here?
-            # actually, let's just visualize the boxes for now and trigger alerts.
+            tracks = self.tracker.update(detections)
             
             annotated_frame = frame.copy()
             
@@ -108,28 +107,47 @@ class Pipeline:
                     cv2.rectangle(annotated_frame, (x, y), (x+w, y+h), (255, 0, 0), 1)
 
             # Draw Detections & Trigger Alerts
+            if detections:
+                # Flashing Alert
+                if int(time.time() * 5) % 2 == 0: # Flash every 0.2s
+                    cv2.putText(annotated_frame, "WARNING: LEOPARD DETECTED!", (50, 100), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 4)
+                
             for det in detections:
                 x1, y1, x2, y2, _, conf, _ = det
                 
                 # Alert Logic
                 self.alert_system.trigger_alert({'conf': conf, 'bbox': [x1, y1, x2, y2]}, annotated_frame)
                 
-                # Draw
+                # Draw Box ONLY (No Text)
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
-                cv2.putText(annotated_frame, f"Leopard: {conf:.2f}", (int(x1), int(y1)-10), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
             # Update Stream
-            # Add FPS
-            fps = self.frame_count / (current_time - self.start_time)
-            cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-            
             self.stream_server.update_frame(annotated_frame)
+            
+            # Write to video file
+            if self.video_writer is None:
+                height, width = annotated_frame.shape[:2]
+                logger.info(f"Initializing VideoWriter with {width}x{height} @ 30.0 fps")
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                self.output_path = self.output_path.with_suffix('.mp4') # Ensure mp4 extension
+                self.video_writer = cv2.VideoWriter(str(self.output_path), fourcc, 30.0, (width, height))
+                
+                if not self.video_writer.isOpened():
+                    logger.error("Failed to open VideoWriter!")
+                else:
+                    logger.info(f"VideoWriter initialized successfully at {self.output_path}")
+            
+            if self.video_writer and self.video_writer.isOpened():
+                self.video_writer.write(annotated_frame)
             
     def stop(self):
         self.running = False
         self.camera.stop()
         self.alert_system.stop()
+        if self.video_writer:
+            self.video_writer.release()
+            logger.info(f"Output video saved to {self.output_path}")
 
 if __name__ == "__main__":
     pipeline = Pipeline()
